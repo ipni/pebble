@@ -686,16 +686,25 @@ func (i *Iter) Next() *base.InternalKV {
 					}
 					// The merge includes the base, so the key does not exist
 					// at this sequence number.
-					if origSnapshotIdx == 0 && i.delElider.ShouldElide(i.kv.K.UserKey) {
-						// Nothing older exists for the key, so no record is
-						// needed. This is the key's oldest stripe, so the loop
-						// continues with the next user key or ends.
-						if i.skip {
-							// mergeNext consumed a SET or DEL and the iterator
-							// is still on it. Skip it and the rest of the stripe.
-							i.skipInStripe()
+					if i.delElider.ShouldElide(i.kv.K.UserKey) {
+						if origSnapshotIdx == 0 {
+							// Nothing older survives for the key, so no record
+							// is needed. This is the key's oldest stripe, so the
+							// loop continues with the next user key or ends.
+							if i.skip {
+								// mergeNext consumed a SET or DEL and the
+								// iterator is still on it. Skip it and the rest
+								// of the stripe.
+								i.skipInStripe()
+							}
+							if i.iterStripeChange == newStripeSameKey {
+								panic(errors.AssertionFailedf("pebble: merge in last stripe found a new stripe within the same key"))
+							}
+							continue
 						}
-						continue
+						// The tombstone could be elided if not for an open
+						// snapshot. Mark it as pinned, as for a DEL.
+						i.snapshotPinned = true
 					}
 					// A tombstone shadows older entries in older stripes and
 					// lower levels. If mergeNext consumed a SET or DEL,
