@@ -465,9 +465,10 @@ func (i *Iter) Next() *base.InternalKV {
 		panic(errors.AssertionFailedf("compaction iterator has skip=true, but iterator is at iterPosNext"))
 	}
 
-	i.pos = iterPosCurForward
-
 	for i.iterKV != nil {
+		// The iterator is at the key this iteration considers. Helpers that
+		// read ahead set iterPosNext before Next returns.
+		i.pos = iterPosCurForward
 		i.frontiers.Advance(i.iterKV.K.UserKey)
 
 		// If we entered a new snapshot stripe with the same key, any key we
@@ -694,7 +695,6 @@ func (i *Iter) Next() *base.InternalKV {
 							// is still on it. Skip it and the rest of the stripe.
 							i.skipInStripe()
 						}
-						i.pos = iterPosCurForward
 						continue
 					}
 					// A tombstone shadows older entries in older stripes and
