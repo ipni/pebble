@@ -679,49 +679,46 @@ func (i *Iter) Next() *base.InternalKV {
 				}
 				i.kv.V, needDelete, i.valueCloser, i.err = finishValueMerger(valueMerger, includesBase)
 			}
-			if i.err == nil {
-				if needDelete {
-					if i.closeValueCloser() != nil {
-						return nil
-					}
-					// The merge includes the base, so the key does not exist
-					// at this sequence number.
-					if i.delElider.ShouldElide(i.kv.K.UserKey) {
-						if origSnapshotIdx == 0 {
-							// Nothing older survives for the key, so no record
-							// is needed. This is the key's oldest stripe, so the
-							// loop continues with the next user key or ends.
-							if i.skip {
-								// mergeNext consumed a SET or DEL and the
-								// iterator is still on it. Skip it and the rest
-								// of the stripe.
-								i.skipInStripe()
-							}
-							if i.iterStripeChange == newStripeSameKey {
-								panic(errors.AssertionFailedf("pebble: merge in last stripe found a new stripe within the same key"))
-							}
-							continue
-						}
-						// The tombstone could be elided if not for an open
-						// snapshot. Mark it as pinned, as for a DEL.
-						i.snapshotPinned = true
-					}
-					// A tombstone shadows older entries in older stripes and
-					// lower levels. If mergeNext consumed a SET or DEL,
-					// skip=true makes the next call skip the rest of the
-					// stripe.
-					i.kv.K.SetKind(base.InternalKeyKindDelete)
-					i.kv.V = base.InternalValue{}
-					return &i.kv
-				}
-				return &i.kv
-			}
 			if i.err != nil {
 				// TODO(sumeer): why is MarkCorruptionError only being called for
 				// MERGE?
 				i.err = base.MarkCorruptionError(i.err)
+				return nil
 			}
-			return nil
+			if !needDelete {
+				return &i.kv
+			}
+			if i.closeValueCloser() != nil {
+				return nil
+			}
+			// The merge includes the base, so the key does not exist at this
+			// sequence number.
+			if i.delElider.ShouldElide(i.kv.K.UserKey) {
+				if origSnapshotIdx == 0 {
+					// Nothing older survives for the key, so no record is
+					// needed. This is the key's oldest stripe, so the loop
+					// continues with the next user key or ends.
+					if i.skip {
+						// mergeNext consumed a SET or a deletion tombstone and
+						// the iterator is still on it. Skip it and the rest of
+						// the stripe.
+						i.skipInStripe()
+					}
+					if i.iterStripeChange == newStripeSameKey {
+						panic(errors.AssertionFailedf("pebble: merge in last stripe found a new stripe within the same key"))
+					}
+					continue
+				}
+				// The tombstone could be elided if not for an open snapshot.
+				// Mark it as pinned, as for a DEL.
+				i.snapshotPinned = true
+			}
+			// A tombstone shadows older entries in older stripes and lower
+			// levels. If mergeNext consumed a SET or a deletion tombstone,
+			// skip=true makes the next call skip the rest of the stripe.
+			i.kv.K.SetKind(base.InternalKeyKindDelete)
+			i.kv.V = base.InternalValue{}
+			return &i.kv
 
 		default:
 			i.err = base.CorruptionErrorf("invalid internal key kind: %d", errors.Safe(i.iterKV.Kind()))
