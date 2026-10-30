@@ -61,13 +61,24 @@ type ValueMerger interface {
 }
 
 // DeletableValueMerger is an extension to ValueMerger which allows indicating that the
-// result of a merge operation is non-existent. Such non-existent entries will eventually
-// be deleted during compaction. Note that during compaction, non-existence of the result
-// of a merge means that the merge operands will not result in any record being output.
-// This is not the same as transforming the merge operands into a deletion tombstone, as
-// older merge operands will still be visible during iteration. Deletion of the merge operands
-// in this way is akin to the way a SingleDelete+Set combine into non-existence while leaving
-// older records for the same key unaffected.
+// result of a merge operation is non-existent. Reads treat a non-existent result as a
+// missing key.
+//
+// During compaction, what a non-existent result produces depends on includesBase:
+//   - If includesBase is false, the merge may have covered only some of the key's
+//     operands. These operands produce no record, and older records for the key stay
+//     visible. A merger may report non-existence here only if these operands, merged
+//     onto any older state of the key, give back that state: the same value, or a
+//     missing key when the key was missing. Dropping them then changes no read. Pebble
+//     cannot check this; the application must ensure it. For example, a sum merger that
+//     treats a sum of zero as non-existent satisfies it as long as no key holds a stored
+//     zero, such as a zero written with Set. A merger that reports non-existence only
+//     when includesBase is true needs no such condition.
+//   - If includesBase is true, the key does not exist as of the merge's sequence number.
+//     The compaction writes a deletion tombstone that shadows older records, or writes
+//     nothing when no older record for the key survives. Newer operands are later merged
+//     without those older records, so merging operands onto a history that resolves to
+//     non-existence must give the same result as merging them alone.
 type DeletableValueMerger interface {
 	ValueMerger
 
