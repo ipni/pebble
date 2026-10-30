@@ -64,19 +64,27 @@ type ValueMerger interface {
 // result of a merge operation is non-existent. Reads treat a non-existent result as a
 // missing key.
 //
-// During compaction, what a non-existent result produces depends on includesBase:
-//   - If includesBase is false, the merge covered only some of the key's operands. These
-//     operands produce no record, and older records for the same key stay visible. A
-//     merger should report non-existence here only when the operands leave any older
-//     value unchanged.
-//   - If includesBase is true, the key does not exist as of the merge's sequence number.
-//     The compaction writes a deletion tombstone that shadows older records, or writes
-//     nothing when no older record for the key can exist.
+// Pebble calls DeletableFinish only when the merge includes the key's base: during reads,
+// and during compactions where the merge reaches a SET or a deletion tombstone for the
+// key, or the key's oldest record when nothing older lies below the whole compaction.
+// includesBase is therefore always true. A non-existent result means the key does not
+// exist as of the merge's sequence number. The compaction writes a deletion tombstone
+// that shadows older records, or writes nothing when no older record for the key
+// survives. Newer operands are later merged without those older records, so merging
+// operands onto a history that resolves to non-existence must give the same result as
+// merging them alone.
+//
+// A compaction that may not include the base calls Finish(false) and writes the result
+// as a MERGE operand, as it does for any ValueMerger. That result must be a valid operand
+// even when the operands would resolve to non-existence on their own, such as a sum of
+// zero, since the outcome depends on older records the merge did not see.
 type DeletableValueMerger interface {
 	ValueMerger
 
 	// DeletableFinish enables a value merger to indicate that the result of a merge operation
-	// is non-existent. See Finish for a description of includesBase.
+	// is non-existent. includesBase is always true: a key can be deleted only once the merge
+	// reaches its base, so a merge that may not include the base calls Finish(false)
+	// instead.
 	DeletableFinish(includesBase bool) (value []byte, delete bool, closer io.Closer, err error)
 }
 

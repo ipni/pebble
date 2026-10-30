@@ -179,9 +179,9 @@ a:1
 c:2
 .
 
-# A snapshot separates merge operands from their base. The newer operands
-# resolve to non-existence without the base, so the flush writes no record for
-# them and both readers see the older stripe's result.
+# A snapshot separates merge operands from their base. The newer operands sum
+# to zero without the base and are written as a MERGE, so both readers see the
+# older stripe's result.
 define merger=deletable
 set a 5
 merge a -1

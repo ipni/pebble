@@ -1066,7 +1066,8 @@ a#inf,RANGEDEL:; Span() = a-c:{(#3,RANGEDEL)}
 b#5,MERGE:5
 b#1,MERGE:1
 
-# NB: Zero values are skipped by deletable merger.
+# Operands merged without their base produce a MERGE, even when they sum to
+# zero.
 define merger=deletable
 a#4,MERGE:-2
 a#3,MERGE:-1
@@ -1083,8 +1084,8 @@ first
 next
 next
 ----
-.
-.
+a#4,MERGE:0
+b#4,MERGE:0
 .
 
 # A merge that consumes its base SET and resolves to non-existence becomes a
@@ -1122,8 +1123,8 @@ a#3,DEL:
 b#2,SET:5
 .
 
-# Operands that resolve to non-existence without the base produce no record.
-# The next key is a DEL, which sets skip=true when it is returned.
+# Operands that sum to zero without the base produce a MERGE. The next key is a
+# DEL, which sets skip=true when it is returned.
 define merger=deletable
 a#3,MERGE:-2
 a#2,MERGE:2
@@ -1135,14 +1136,16 @@ iter
 first
 next
 next
+next
 ----
+a#3,MERGE:0
 b#2,DEL:
 c#1,SET:1
 .
 
-# A snapshot separates the operands from their base. The newer stripe resolves
-# to non-existence and produces no record. The older stripe is merged with its
-# base.
+# A snapshot separates the operands from their base. The newer stripe sums to
+# zero without its base and produces a MERGE. The older stripe is merged with
+# its base.
 define merger=deletable
 a#4,MERGE:-2
 a#3,MERGE:2
@@ -1155,7 +1158,9 @@ iter snapshots=3
 first
 next
 next
+next
 ----
+a#4,MERGE:0
 a#2,SET:4
 b#1,SET:1
 .

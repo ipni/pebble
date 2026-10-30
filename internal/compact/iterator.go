@@ -647,8 +647,7 @@ func (i *Iter) Next() *base.InternalKV {
 			if i.err == nil {
 				i.mergeNext(valueMerger)
 			}
-			needDelete := false
-			includesBase := false
+			var needDelete bool
 			if i.err == nil {
 				// If this is the oldest version of this key (the bottommost
 				// snapshot stripe), we can transform the sequence number to
@@ -668,6 +667,7 @@ func (i *Iter) Next() *base.InternalKV {
 
 				// includesBase is true when we've merged the oldest operand in
 				// the LSM.
+				var includesBase bool
 				switch i.kv.K.Kind() {
 				case base.InternalKeyKindSet, base.InternalKeyKindSetWithDelete:
 					includesBase = true
@@ -682,15 +682,6 @@ func (i *Iter) Next() *base.InternalKV {
 				if needDelete {
 					if i.closeValueCloser() != nil {
 						return nil
-					}
-					if !includesBase {
-						// The operands resolve to non-existence without the
-						// base. They produce no record, and older entries for
-						// the key stay visible. mergeNext stopped on the next
-						// stripe or user key, or at the end of the input, and
-						// the loop continues from there.
-						i.pos = iterPosCurForward
-						continue
 					}
 					// The merge includes the base, so the key does not exist
 					// at this sequence number.
@@ -1541,7 +1532,9 @@ func finishValueMerger(
 	valueMerger base.ValueMerger, includesBase bool,
 ) (_ base.InternalValue, needDelete bool, closer io.Closer, err error) {
 	var value []byte
-	if valueMerger2, ok := valueMerger.(base.DeletableValueMerger); ok {
+	// Only a merge that includes the base may resolve to non-existence. A merge
+	// without the base writes its result as a MERGE operand.
+	if valueMerger2, ok := valueMerger.(base.DeletableValueMerger); ok && includesBase {
 		value, needDelete, closer, err = valueMerger2.DeletableFinish(includesBase)
 	} else {
 		value, closer, err = valueMerger.Finish(includesBase)
