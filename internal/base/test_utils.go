@@ -16,7 +16,9 @@ import (
 )
 
 // NewDeletableSumValueMerger return a ValueMerger which computes the sum of its
-// arguments, but transforms a zero sum into a non-existent entry.
+// arguments, but transforms a zero sum into a non-existent entry. It reports a
+// zero sum as non-existent even without the base, which is sound only when no
+// key holds a stored zero.
 func NewDeletableSumValueMerger(key, value []byte) (ValueMerger, error) {
 	m := &deletableSumValueMerger{}
 	return m, m.MergeNewer(value)

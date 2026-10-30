@@ -65,13 +65,20 @@ type ValueMerger interface {
 // missing key.
 //
 // During compaction, what a non-existent result produces depends on includesBase:
-//   - If includesBase is false, the merge covered only some of the key's operands. These
-//     operands produce no record, and older records for the same key stay visible. A
-//     merger should report non-existence here only when the operands leave any older
-//     value unchanged.
+//   - If includesBase is false, the merge may have covered only some of the key's
+//     operands. These operands produce no record, and older records for the key stay
+//     visible. A merger may report non-existence here only if these operands, merged
+//     onto any older state of the key, give back that state: the same value, or a
+//     missing key when the key was missing. Dropping them then changes no read. Pebble
+//     cannot check this; the application must ensure it. For example, a sum merger that
+//     treats a sum of zero as non-existent satisfies it as long as no key holds a stored
+//     zero, such as a zero written with Set. A merger that reports non-existence only
+//     when includesBase is true needs no such condition.
 //   - If includesBase is true, the key does not exist as of the merge's sequence number.
 //     The compaction writes a deletion tombstone that shadows older records, or writes
-//     nothing when no older record for the key can exist.
+//     nothing when no older record for the key survives. Newer operands are later merged
+//     without those older records, so merging operands onto a history that resolves to
+//     non-existence must give the same result as merging them alone.
 type DeletableValueMerger interface {
 	ValueMerger
 
