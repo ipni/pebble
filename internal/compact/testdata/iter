@@ -1087,6 +1087,28 @@ next
 .
 .
 
+# An elided merge continues the loop after mergeNext has read ahead to b. The
+# DEL returned next sets skip=true, so the following call must start from the
+# DEL's position, not from the merge's read-ahead position.
+define merger=deletable
+a#3,MERGE:-2
+a#2,MERGE:2
+b#5,DEL:
+b#1,SET:1
+c#1,SET:1
+----
+
+iter is-bottommost-layer=true elide-tombstones=true snapshots=4
+first
+next
+next
+next
+----
+b#5,DEL:
+b#0,SET:1
+c#0,SET:1
+.
+
 # A merge that consumes its base SET and resolves to non-existence becomes a
 # DEL. The consumed SET and the rest of the stripe are skipped.
 define merger=deletable
