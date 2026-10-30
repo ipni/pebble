@@ -1211,7 +1211,9 @@ b#1,SET:1
 .
 
 # At the bottom of the LSM, a merge that resolves to non-existence produces no
-# record when tombstones can be elided, and a DEL when they cannot.
+# record. Above the bottom, where tombstones cannot be elided, operands without
+# their base that resolve to non-existence produce no record, and a merge that
+# consumes its SET becomes a DEL.
 define merger=deletable
 a#3,MERGE:-2
 a#2,MERGE:2
@@ -1227,15 +1229,31 @@ next
 c#0,SET:5
 .
 
-iter is-bottommost-layer=true elide-tombstones=false
+iter
 first
 next
 next
+----
+b#4,DEL:
+c#2,SET:5
+.
+
+# A range deletion right after operands that resolve to non-existence without
+# their base is returned once.
+define merger=deletable
+a#3,MERGE:-2
+a#2,MERGE:2
+b#4,RANGEDEL:c
+c#1,SET:1
+----
+
+iter
+first
+next
 next
 ----
-a#0,DEL:
-b#0,DEL:
-c#0,SET:5
+b#inf,RANGEDEL:; Span() = b-c:{(#4,RANGEDEL)}
+c#1,SET:1
 .
 
 # The elision decision uses the merge's own stripe. mergeNext moves on to b in a
