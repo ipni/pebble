@@ -1540,10 +1540,13 @@ func finishValueMerger(
 	var value []byte
 	// Only a merge that includes the base may resolve to non-existence. A merge
 	// without the base writes its result as a MERGE operand.
-	if valueMerger2, ok := valueMerger.(base.DeletableValueMerger); ok && includesBase {
-		value, needDelete, closer, err = valueMerger2.DeletableFinish(includesBase)
-	} else {
-		value, closer, err = valueMerger.Finish(includesBase)
+	if includesBase {
+		if deletable, ok := valueMerger.(base.DeletableValueMerger); ok {
+			value, needDelete, closer, err = deletable.DeletableFinish(includesBase)
+			return base.MakeInPlaceValue(value), needDelete, closer, err
+		}
 	}
+
+	value, closer, err = valueMerger.Finish(includesBase)
 	return base.MakeInPlaceValue(value), needDelete, closer, err
 }
